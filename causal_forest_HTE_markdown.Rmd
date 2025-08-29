@@ -1,0 +1,76 @@
+---
+title: "HTE: Causal Forest"
+author: "Patricio Ortiz"
+output: pdf_document
+date: "2023-06-07"
+header-includes:
+  \usepackage{fvextra}
+  \DefineVerbatimEnvironment{Highlighting}{Verbatim}{breaklines,commandchars=\\\{\}}
+---
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Section 0: Import Data, Clean
+
+```{r}
+#Install Packages, uncomment first 2 lines
+  #install.packages("devtools")  # if you don't have this installed yet.
+  #devtools::install_github('susanathey/causalTree')
+
+library(lmtest)
+library(plm)
+library(ggplot2)
+
+#Import Data from data preparation file, Note to future user: change to your working directory!
+wd = getwd()
+source(paste0(wd, "/data preparation.R"))
+
+```
+
+## Section 1: Causal Forest
+
+```{r }
+# estimating AIPW estimator using causal forest
+    library(glmnet)
+    library(grf)
+    # Observational setting with unconf + overlap, unknown assignment probs. Use test data set.
+    train.forest.tau <- causal_forest(X_train, as.vector(Y_train), as.vector(W_train))
+    test.forest.tau <- causal_forest(X_test, as.vector(Y_test), as.vector(W_test))
+    #new  tau.hat.est
+    tau.hat.est2 <- predict(train.forest.tau, X_test)$predictions
+     
+```
+
+## Section 2: Calibration Test
+```{r }
+test_calibration(test.forest.tau)
+      #coefficient of 2.7 with significance above 0. Where if this beta coefficient
+        #was >0 significantly, then we can reject the null hypothesis of NO heterogeneity.
+        #seeing as we see this, we reject the null hypothesis of no heterogeneity in treatment effect.
+```
+
+## Section 3: Rate Curve: 
+y-axis: test causal forest predictions, 
+x-axis: train data set causal forest predictions.
+```{r }
+rank_rlearner <- rank_average_treatment_effect(test.forest.tau, tau.hat.est2)
+    rank_rlearner
+    plot(rank_rlearner, las=1)
+    
+      #graph: estimate returns from RATE (on y-axis) represents the difference of the ATE from that point's top-q % of
+        #population versus the overall ATE from everyone being treated. So we expect it to decrease.
+        #Here that means that people most affected by the car ban based on their covariates are more likely to get 
+        #a positive treatment: that is, they vote for the conservative
+        
+      #estimate
+        #positive and within +-2 standard errors is still above zero so heterogeneity is detected here at 95% CI.
+
+```
+
+## Section 4: Best Linear Projections: 
+```{r }
+best_linear_projection(train.forest.tau, X_train)
+```
